@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print the MS2130's measured progressive HDMI timing (polarity unavailable)."""
+"""Print the MS2130's progressive video timing, signaling type and sync polarities."""
 
 import hid
 
@@ -24,7 +24,7 @@ try:
     period = readaddr(device, 0xE148)[1]  # HDMI line period in 384 MHz ticks
     regs = {addr: readaddr(device, addr) for addr in
             (0xE14C, 0xE150, 0xE168, 0xE170, 0xE184, 0xE188,
-             0xE18C, 0xE190, 0xE194)}
+             0xE18C, 0xE190, 0xE194, 0x23AC, 0x23DC)}
     period_end = readaddr(device, 0xE148)[1]
 finally:
     device.close()
@@ -34,6 +34,9 @@ hfront, hsync = regs[0xE188]
 height, vblank = regs[0xE18C]
 vfront, vsync = regs[0xE190]
 vback = regs[0xE194][0]
+polarity = regs[0x23AC][0]
+hdmi = regs[0x23DC][0] & 1
+
 htotal, vtotal = width + hblank, height + vblank
 if not (period and period_end and abs(period - period_end) <= 5
         and width and height and hsync and vsync
@@ -45,13 +48,16 @@ if not (period and period_end and abs(period - period_end) <= 5
 clock_mhz = 384 * htotal / period
 print(f"Pixel clock (MHz): {clock_mhz:.3f}"
       f"\nRefresh rate (Hz): {clock_mhz * 1_000_000 / (htotal * vtotal):.3f}"
+      f"\nInput signaling: {'HDMI' if hdmi else 'DVI'}"
       f"\nHorizontal active (pixels): {width}"
       f"\nHorizontal front porch (pixels): {hfront}"
       f"\nHorizontal sync width (pixels): {hsync}"
       f"\nHorizontal back porch (pixels): {hblank - hfront - hsync}"
+      f"\nHorizontal sync polarity: {'+' if polarity & 0x02 else '-'}"
       f"\nHorizontal total (pixels): {htotal}"
       f"\nVertical active (lines): {height}"
       f"\nVertical front porch (lines): {vfront}"
       f"\nVertical sync width (lines): {vsync}"
       f"\nVertical back porch (lines): {vback}"
+      f"\nVertical sync polarity: {'+' if polarity & 0x04 else '-'}"
       f"\nVertical total (lines): {vtotal}")
